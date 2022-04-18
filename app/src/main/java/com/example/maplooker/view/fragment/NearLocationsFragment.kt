@@ -204,6 +204,7 @@ class NearLocationsFragment : Fragment() {
         }
     }
 
+
     private val locationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (isGranted) {
