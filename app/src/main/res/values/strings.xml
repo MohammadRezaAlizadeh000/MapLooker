@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">MapLooker</string>
+    <string name="showLocationOnMapBtn">نمایش لوکیشن بر روی نقشه</string>
+    <string name="locationAddressLabel">آدرس لوکیشن</string>
+    <string name="locationNameLabel">نام لوکیشن</string>
+    <string name="permissionError">شما باید دسترسی های مورد نیاز برنامه را بپذیرید</string>
+    <string name="checkPermissionAgainBtn">بررسی مجوزها</string>
+    <string name="locationIsNull">به دبلیل نیافتن لوکیشن شما اطلاعات به روز نشدند</string>
+    <string name="canNotAccessLocationData">امکان دریافت لوکیشن شما وجود ندارد</string>
+    <string name="locationDataUpdated">اطلاعات لوکیشن به روز شد</string>
+    <string name="loadingLocation">در حال به روز رسانی لوکیشن شما...</string>
+</resources>
