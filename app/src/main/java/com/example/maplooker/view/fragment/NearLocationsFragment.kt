@@ -1,13 +1,7 @@
 package com.example.maplooker.view.fragment
 
-import android.Manifest
-import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
-import android.content.IntentSender
-import android.content.pm.PackageManager
-import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -15,11 +9,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -28,23 +18,17 @@ import com.example.maplooker.R
 import com.example.maplooker.di.DaggerAppComponent
 import com.example.maplooker.model.NearLocationsModel
 import com.example.maplooker.utils.*
+import com.example.maplooker.view.BaseFragment
 import com.example.maplooker.view.adapter.NearLocationsRecyclerViewAdapter
 import com.example.maplooker.view.adapter.OnLocationClickListener
 import com.example.maplooker.viewmodel.NearPlacesListViewModel
-import com.google.android.gms.common.api.ApiException
-import com.google.android.gms.common.api.ResolvableApiException
-import com.google.android.gms.location.*
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import io.reactivex.rxjava3.core.Observable
-import io.reactivex.rxjava3.disposables.CompositeDisposable
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 
-class NearLocationsFragment : Fragment() {
-
-    @Inject
-    lateinit var schedulerProvider: SchedulerProvider
+class NearLocationsFragment : BaseFragment() {
 
     @Inject
     lateinit var viewModelFactory: ViewModelProvider.Factory
@@ -60,150 +44,16 @@ class NearLocationsFragment : Fragment() {
         })
     }
 
-    private val viewModel: NearPlacesListViewModel by viewModels { viewModelFactory }
-    private lateinit var recyclerView: RecyclerView
-    private val compositeDisposable = CompositeDisposable()
-    private lateinit var fusedLocationProviderClient: FusedLocationProviderClient
-    private lateinit var locationRequestBuilder: LocationSettingsRequest.Builder
-    private var locationEnabled = false
-    private var networkEnabled = false
-
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        DaggerAppComponent.create().inject(this)
-        super.onCreate(savedInstanceState)
-    }
-
-    private fun getLocation() {
-        if (isLocationOn()) {
-            checkLocationPermission()
-        } else {
-            turnOnLocation()
-        }
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return container?.inflateLayout(R.layout.near_locations_fragment)!!
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        recyclerView = view.findViewById<RecyclerView?>(R.id.locationsRecyclerView).apply {
-            layoutManager =
-                LinearLayoutManager(requireContext(), LinearLayoutManager.VERTICAL, false)
-            adapter = recyclerViewAdapter
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun getLastLocation() {
-        initFusedLocation()
-        val taskLocation = fusedLocationProviderClient.lastLocation
-        taskLocation.addOnSuccessListener { location ->
-            if (location != null) {
-                viewModel.getNearPlaces(mapOf(LL_QUERY_NAME to ("${location.latitude},${location.longitude}")))
-                initObservers()
-            } else {
-                viewModel.getNearPlacesFromLocalData()
-                toast(getString(R.string.locationIsNull))
-                createBottomSheetError(LOCATION_IS_NULL)
-            }
-        }
-
-        taskLocation.addOnFailureListener { e ->
-            toast(getString(R.string.canNotAccessLocationData))
-            Log.d("LOCATION_TAG", e.toString())
-        }
-
-    }
-
-    private fun initObservers() {
-        compositeDisposable.add(viewModel.observer.observeOn(schedulerProvider.ui()).subscribe { response ->
-            when (response) {
-                is AppState.Success -> {
-                    toast(getString(R.string.locationDataUpdated))
-                    setRecyclerViewData(response.data!!)
-                }
-                is AppState.Error -> toast(response.message.toString())
-                is AppState.Loading -> toast(getString(R.string.loadingLocation))
-            }
-        })
-
-    }
-
-    private fun setRecyclerViewData(dataList: List<NearLocationsModel>) {
-        recyclerViewAdapter.setData(dataList)
-    }
-
-    private fun turnOnLocation() {
-        val locationRequest: LocationRequest = LocationRequest.create().apply {
-            fastestInterval = 1500
-            interval = 3000
-            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-        }
-        locationRequestBuilder =
-            LocationSettingsRequest.Builder().addLocationRequest(locationRequest)
-
-        val result = LocationServices.getSettingsClient(requireContext())
-            .checkLocationSettings(locationRequestBuilder.build())
-
-        result.addOnCompleteListener {
-            try {
-                it.getResult(ApiException::class.java)
-            } catch (e: ApiException) {
-                when (e.statusCode) {
-                    LocationSettingsStatusCodes.RESOLUTION_REQUIRED -> try {
-                        val resolvableApiException = e as ResolvableApiException
-                        turnOnLocationRequest.launch(
-                            IntentSenderRequest.Builder(
-                                resolvableApiException.resolution
-                            ).build()
-                        )
-                    } catch (e: IntentSender.SendIntentException) {
-                        Log.d("LOCATION_TAG", e.toString())
-                    } catch (e: ClassCastException) {
-                        Log.d("LOCATION_TAG", e.toString())
-                    }
-                }
-            }
-        }
-    }
-
     private val turnOnLocationRequest =
         registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
-                checkLocationPermission()
+                locationPermission()
                 Log.d("LOCATION_TAG", "permission Granted")
             } else {
                 createBottomSheetError(LOCATION_ON_FAILED)
                 Log.d("LOCATION_TAG", "permission Denied")
             }
         }
-
-    private fun getLocationPermission() {
-        if (ContextCompat.checkSelfPermission(
-                requireContext(),
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(
-                    requireActivity(),
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                )
-            ) {
-                locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-            } else {
-                locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-            }
-
-        }
-    }
-
     private val locationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (isGranted) {
@@ -212,40 +62,83 @@ class NearLocationsFragment : Fragment() {
                 createBottomSheetError(LOCATION_PERMISSION_NOT_GRANTED)
             }
         }
+    private val viewModel: NearPlacesListViewModel by viewModels { viewModelFactory }
+    private lateinit var recyclerView: RecyclerView
 
-    private fun isLocationOn(): Boolean {
-        val systemServices = requireActivity().getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        try {
-            locationEnabled = systemServices.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        } catch (ex: Exception) {
-        }
-
-        try {
-            networkEnabled = systemServices.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        } catch (ex: Exception) {
-        }
-
-
-        return networkEnabled && locationEnabled
+    override fun onCreate(savedInstanceState: Bundle?) {
+        DaggerAppComponent.create().inject(this)
+        super.onCreate(savedInstanceState)
     }
 
-    private fun checkLocationPermission() {
-        if (ContextCompat.checkSelfPermission(
-                requireContext(),
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-            == PackageManager.PERMISSION_GRANTED
-        ) {
-            getLastLocation()
+    override fun setView() = R.layout.near_locations_fragment
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+
+        recyclerView = view.findViewById<RecyclerView?>(R.id.locationsRecyclerView).apply {
+            layoutManager =
+                LinearLayoutManager(requireContext(), LinearLayoutManager.VERTICAL, false)
+            adapter = recyclerViewAdapter
+        }
+    }
+
+    private fun checkLocationStatus() {
+        if (locationHelper.isLocationOn()) {
+            locationPermission()
         } else {
-            getLocationPermission()
+            turnOnLocation()
         }
     }
 
-    private fun initFusedLocation() {
-        if (!::fusedLocationProviderClient.isInitialized)
-            fusedLocationProviderClient =
-                LocationServices.getFusedLocationProviderClient(requireContext())
+    private fun turnOnLocation() {
+        locationHelper.turnOnLocation { turnOnLocationRequest.launch(it.build()) }
+    }
+
+
+
+    private fun locationPermission() {
+        locationHelper.getLocationPermission {
+            when(it) {
+                "Granted" -> getLastLocation()
+                else -> locationPermission.launch(it)
+            }
+        }
+    }
+
+    private fun getLastLocation() {
+        locationHelper.getLastLocation {
+            when(it) {
+                is LocationState.HasLocation -> {
+                    viewModel.getNearPlaces(mapOf(LL_QUERY_NAME to ("${it.location!!.latitude},${it.location.longitude}")))
+                    initObservers()
+                }
+                is LocationState.NoLocation -> {
+                    viewModel.getNearPlacesFromLocalData()
+                    toast(it.message.toString())
+                    createBottomSheetError(LOCATION_IS_NULL)
+                }
+                is LocationState.Error -> {
+                    toast(it.message.toString())
+                }
+            }
+        }
+    }
+
+
+
+    private fun initObservers() {
+        compositeDisposable.add(viewModel.observer.observeOn(schedulerProvider.ui()).subscribe { response ->
+            when (response) {
+                is AppState.Success -> {
+                    toast(getString(R.string.locationDataUpdated))
+                    recyclerViewAdapter.setData(response.data!!)
+                }
+                is AppState.Error -> toast(response.message.toString())
+                is AppState.Loading -> toast(getString(R.string.loadingLocation))
+            }
+        })
+
     }
 
     private fun createBottomSheetError(state: Int) {
@@ -258,8 +151,8 @@ class NearLocationsFragment : Fragment() {
                 setOnClickListener {
                     when (state) {
                         LOCATION_ON_FAILED -> turnOnLocation()
-                        LOCATION_PERMISSION_NOT_GRANTED -> getLocationPermission()
-                        LOCATION_IS_NULL -> getLocation()
+                        LOCATION_PERMISSION_NOT_GRANTED -> locationPermission()
+                        LOCATION_IS_NULL -> checkLocationStatus()
                     }
                     dismiss()
                 }
@@ -289,7 +182,7 @@ class NearLocationsFragment : Fragment() {
             .subscribeOn(schedulerProvider.ui())
             .subscribe {
                 if (it) {
-                    getLocation()
+                    checkLocationStatus()
 //                    toast("Call again")
                     Log.d("INTERVAL_TAG", "call again")
                 }
@@ -298,19 +191,8 @@ class NearLocationsFragment : Fragment() {
 
     override fun onStart() {
         super.onStart()
-        getLocation()
+        checkLocationStatus()
         interval()
         Log.d("INTERVAL_TAG", "in OnStart")
-    }
-
-    override fun onStop() {
-        super.onStop()
-        compositeDisposable.clear()
-        Log.d("INTERVAL_TAG", "in onStop")
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        compositeDisposable.dispose()
     }
 }
