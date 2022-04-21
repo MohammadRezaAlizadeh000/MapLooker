@@ -121,6 +121,7 @@ class NearLocationsFragment : BaseFragment() {
                 is LocationState.Error -> {
                     toast(it.message.toString())
                 }
+                LocationState.LocationNoteChange -> {  }
             }
         }
     }
@@ -172,7 +173,7 @@ class NearLocationsFragment : BaseFragment() {
     }
 
     private fun interval() {
-        compositeDisposable.add(Observable.interval(1, 1, TimeUnit.MINUTES)
+        compositeDisposable.add(Observable.interval(1, 2, TimeUnit.MINUTES)
             .flatMap {
                 return@flatMap Observable.create<Boolean> { emitter ->
                     emitter.onNext(true)
@@ -183,7 +184,6 @@ class NearLocationsFragment : BaseFragment() {
             .subscribe {
                 if (it) {
                     checkLocationStatus()
-//                    toast("Call again")
                     Log.d("INTERVAL_TAG", "call again")
                 }
             })

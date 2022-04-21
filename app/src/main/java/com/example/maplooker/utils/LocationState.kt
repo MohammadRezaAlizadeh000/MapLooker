@@ -4,6 +4,7 @@ import android.location.Location
 
 sealed class LocationState(val location: Location? = null, val message: String? = null) {
 
+    object LocationNoteChange: LocationState()
     class HasLocation(location: Location): LocationState(location = location)
     class NoLocation(message: String): LocationState(message = message)
     class Error(message: String): LocationState(message = message)
